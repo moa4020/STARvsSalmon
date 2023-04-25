@@ -40,10 +40,9 @@ library(DEGreport)
 library(RColorBrewer)
 ```
 
-### GitHub Links:
+### GitHub Link:
 
-1.  Desktop files and report materials: <https://github.com/moa4020/STARvsSalmon.git>
-2.  Scripts on SCU: <https://github.com/moa4020/ANGSD_PROJECT_SCRIPTS.git>
+Desktop files and report materials: <https://github.com/moa4020/STARvsSalmon.git>
 
 # ANGSD Project: Mohith Arikatla (moa4020)
 
@@ -59,13 +58,23 @@ library(RColorBrewer)
 
 *`A brief paragraph summarizing the scientific background and/or why that particular question is interesting (you should cite at least 3-5 papers). Of course, you should clearly state the question you're going to investigate as well as the specific hypothesis you set out to test.`*
 
-RNA sequencing (RNA-seq) is widely used to profile transcriptomes and identify differentially expressed genes (DEGs) between conditions. The alignment algorithm used in RNA-seq data analysis can affect the results of downstream analysis, including pathway enrichment analysis.
+RNA sequencing (RNA-seq) is widely used to profile transcriptomes and identify differentially expressed genes (DEGs) between conditions. The aim of this project is to determine if alignment algorithm used in RNA-seq data analysis can affect the results of downstream analysis, including pathway enrichment analysis.
 
 Salmon and STAR are two widely used alignment algorithms for RNA-seq data. The specific question to investigate is whether the use of Salmon and STAR alignment algorithms results in different pathways being enriched. This question is interesting because pathway enrichment analysis is often used to identify biological processes involved in specific conditions, and differences in pathway analysis based on the alignment algorithm used could impact the interpretation of results.
 
-Several studies have compared the performance of different RNA-seq alignment algorithms, including Salmon and STAR, and have shown that the choice of alignment algorithm can affect the results of downstream analysis. For example, a study by Hu et al. (2019) compared the performance of different RNA-seq alignment algorithms and showed that the choice of alignment algorithm can significantly affect the identification of DEGs. Another study by Xu et al. (2020) evaluated the performance of different RNA-seq alignment algorithms for quantifying gene expression and showed that Salmon performed better than STAR for some metrics. A third study by Tarazona et al. (2015) compared different RNA-seq analysis pipelines and showed that different pipelines can lead to different results in terms of DEG identification and pathway enrichment analysis.
+Several studies have compared the performance of different RNA-seq alignment algorithms, including Salmon and STAR, and have shown that the choice of alignment algorithm can influence the transcript abundance estimation [[1]](doi:10.1186/s13059-020-02151-8 "Srivastava A, Malik L, Sarkar H, et al. Alignment and mapping methodology influence transcript abundance estimation. Genome Biol. 2020;21(1):239. Published 2020 Sep 7. doi:10.1186/s13059-020-02151-8"). In the study Srivastava et al., observe that, on experimental datasets, the performance of lightweight mapping and alignment-based approaches vary significantly. They show this variation both in terms of quantification and downstream differential expression analysis.
 
-Overall, the hypothesis is that applying Salmon and STAR alignment algorithms will result in different pathways being enriched.
+Pseudo-aligners provide an advantage in terms of the time of computation due to skipping redundant hash-mappings. If the sequencing data is pairwise aligned, mapping will get easier since unique k-mers can be identified for each transcript and this index will reduce the amount of computation required by the algorithm [[2]](doi:10.1038/nbt0816-888d "Bray NL, Pimentel H, Melsted P, Pachter L. Erratum: Near-optimal probabilistic RNA-seq quantification. Nat Biotechnol. 2016;34(8):888. doi:10.1038/nbt0816-888d"). The makers of the algorithm kallisto mention that "For the majority of reads, kallisto ends up performing a hash lookup for only two k-mers" [[3]](doi:10.1038/nbt.3519 "Bray NL, Pimentel H, Melsted P, Pachter L. Near-optimal probabilistic RNA-seq quantification [published correction appears in Nat Biotechnol. 2016 Aug 9;34(8):888]. Nat Biotechnol. 2016;34(5):525-527. doi:10.1038/nbt.3519").
+
+[![How "Pseudoalignments" Work in kallisto](Pseudo-aligners.png)](https://tinyheero.github.io/2015/09/02/pseudoalignments-kallisto.html)
+
+A systematic review in which Crochete et al., ran a combination of 192 pipelines to quantify raw gene expression [[4]](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7665074/ "Corchete LA, Rojas EA, Alonso-López D, De Las Rivas J, Gutiérrez NC, Burguillo FJ. Systematic comparison and assessment of RNA-seq procedures for gene expression quantitative analysis. Sci Rep. 2020;10(1):19737. Published 2020 Nov 12. doi:10.1038/s41598-020-76881-x"). The authors mentioned the advantages pseudo-aligners have over algorithms that align against the genome to being able to conduct alignment, counting and normalization in a single step. Although the accuracy of pseudo-aligners seem to be inferior to classical aligners, pseudo-alignment is still a robust method to quantify gene expression [[4]](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7665074/ "Corchete LA, Rojas EA, Alonso-López D, De Las Rivas J, Gutiérrez NC, Burguillo FJ. Systematic comparison and assessment of RNA-seq procedures for gene expression quantitative analysis. Sci Rep. 2020;10(1):19737. Published 2020 Nov 12. doi:10.1038/s41598-020-76881-x").
+
+[![RNA-Seq Data Analysis Workflow](RNA-Seq_data_analysis_workflow.png)](Corchete LA, Rojas EA, Alonso-López D, De Las Rivas J, Gutiérrez NC, Burguillo FJ. Systematic comparison and assessment of RNA-seq procedures for gene expression quantitative analysis. Sci Rep. 2020;10(1):19737. Published 2020 Nov 12. doi:10.1038/s41598-020-76881-x)
+
+> **Hypothesis:** Using different alignment algorithms (STAR & Salmon) to quantify gene expression leads to different pathways being enriched post-Gene Ontology analysis.
+>
+> **Result:** No consequential difference was observed between the DEGs and pathways enriched downstream of STAR and Salmon gene expression quantification.
 
 ## Results
 
@@ -74,11 +83,11 @@ Overall, the hypothesis is that applying Salmon and STAR alignment algorithms wi
 1.  There appears to be no significant difference between the end results of both the algorithms when considering this particular functionality (Differential Expression Analysis).
 2.  This might be limited to well studied genomes. More research needs to be done on organisms that have not been indexed accurately.
 3.  Conducting Gene Ontology assessment requires prior knowledge about the over-represented pathways that pop-up in certain genomes often, making a note of these GO terms while interpreting the results of GO enrichment will keep one from being misled due to these biases.
-4.  Further well thought out GO analysis should be conducted on this dataset.
+4.  Further well thought-out GO analysis should be conducted on this dataset.
 
 #### Limitations:
 
-1.  The authors did not disclose what kind of pathway analysis they've performed in the paper. This lead to a lot of confusion due to a mismatch between my results and the paper's, post-EnrichKEGG.
+1.  The authors did not disclose what kind of pathway analysis they've performed in the paper. This lead to a lot of confusion due to a mismatch between my results and the paper's, post-EnrichKEGG using clusterProfiler.
 2.  The authors also did not mention dealing with over-represented pathways based on the gene-ratio bias.
 3.  The RNA-Seq analysis for this paper was delegated to the bioinformatics-core in Harvard explaining why the finer details for this step were not provided.
 
@@ -771,7 +780,9 @@ STAR_vp <- EnhancedVolcano(DGE.results.shrnk, lab=rownames(DGE.results.shrnk),
 Salmon_vp <- EnhancedVolcano(salmon_DGE.results.shrnk, lab=rownames(salmon_DGE.results.shrnk),
                        x='log2FoldChange', y='padj', pCutoff = 0.05,
                        title="Salmon (with logFC shrinkage)")
-STAR_vp + Salmon_vp
+STAR_vp
+
+Salmon_vp
 
 ```
 
@@ -907,20 +918,25 @@ A2Counts <- counts(DESeq.ds[A2Specific, ])
 
 ### Pan Reactive Genes Up-regulated in SPP1_KO samples
 
-```{r}
+```{r fig.height=6, fig.width=8}
+# Set up the layout for the plot
+par(mfrow=c(4, 8))
 
-for(gene in PanReactive){
-  par(mfrow=c(1,2))
+# Loop through the genes and plot the counts
+for (i in 1:length(PanReactive)){
+  gene <- PanReactive[i]
   plotCounts(DESeq.ds, gene=gene, normalized = TRUE, xlab="STAR")
   plotCounts(salmon_DESeq.ds, gene = gene, normalized = TRUE, xlab="Salmon", main = gene)
 }
+
 ```
 
 ### A1-Specific Genes Up-regulated in SPP1_KO samples
 
-```{r}
+```{r fig.height=6, fig.width=8}
+par(mfrow=c(3, 8))
+
 for(gene in A1Specific){
-  par(mfrow=c(1,2))
   plotCounts(DESeq.ds, gene=gene, normalized = TRUE, xlab="STAR")
   plotCounts(salmon_DESeq.ds, gene = gene, normalized = TRUE, xlab="Salmon", main = gene)
 }
@@ -928,9 +944,10 @@ for(gene in A1Specific){
 
 ### No particular trend observed in A2-Specific Genes in SPP1_KO samples
 
-```{r}
+```{r fig.height=6, fig.width=8}
+par(mfrow=c(3, 8))
+
 for(gene in A2Specific){
-  par(mfrow=c(1,2))
   plotCounts(DESeq.ds, gene=gene, normalized = TRUE, xlab="STAR")
   plotCounts(salmon_DESeq.ds, gene = gene, normalized = TRUE, xlab="Salmon", main = gene)
 }
