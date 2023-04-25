@@ -1,0 +1,961 @@
+---
+title: "ANGSD_Project"
+author: "Mohith Reddy Arikatla - (CWID - moa4020)"
+date: "2023-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(htmltools)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(data.table)
+library(DESeq2)
+library(edgeR)
+library(goseq)
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+#BiocManager::install("TxDb.Mmusculus.UCSC.mm10.ensGene")
+library(TxDb.Mmusculus.UCSC.mm10.ensGene)
+library(ggplot2)
+#BiocManager::install("pheatmap")
+library(pheatmap)
+#BiocManager::install("EnhancedVolcano")
+library(EnhancedVolcano)
+#BiocManager::install("apeglm")
+library(apeglm)
+library(patchwork)
+library(clusterProfiler)
+#BiocManager::install("enrichplot")
+library(enrichplot)
+#install.packages("ggupset")
+library(ggupset)
+#BiocManager::install("topGO")
+library(topGO)
+library(tidyverse)
+library(ggrepel)
+library(DEGreport)
+library(RColorBrewer)
+```
+
+### GitHub Links:
+
+1.  Desktop files and report materials: <https://github.com/moa4020/STARvsSalmon.git>
+2.  Scripts on SCU: <https://github.com/moa4020/ANGSD_PROJECT_SCRIPTS.git>
+
+# ANGSD Project: Mohith Arikatla (moa4020)
+
+# Index
+
+1.  [Introduction]
+2.  [Results]
+3.  [Methods]
+4.  [Discussion]
+5.  [Key datasets used in this study]
+
+## Introduction
+
+*`A brief paragraph summarizing the scientific background and/or why that particular question is interesting (you should cite at least 3-5 papers). Of course, you should clearly state the question you're going to investigate as well as the specific hypothesis you set out to test.`*
+
+RNA sequencing (RNA-seq) is widely used to profile transcriptomes and identify differentially expressed genes (DEGs) between conditions. The alignment algorithm used in RNA-seq data analysis can affect the results of downstream analysis, including pathway enrichment analysis.
+
+Salmon and STAR are two widely used alignment algorithms for RNA-seq data. The specific question to investigate is whether the use of Salmon and STAR alignment algorithms results in different pathways being enriched. This question is interesting because pathway enrichment analysis is often used to identify biological processes involved in specific conditions, and differences in pathway analysis based on the alignment algorithm used could impact the interpretation of results.
+
+Several studies have compared the performance of different RNA-seq alignment algorithms,
+including Salmon and STAR, and have shown that the choice of alignment algorithm can affect the results of downstream analysis. For example, a study by Hu et al. (2019) compared the performance of different RNA-seq alignment algorithms and showed that the choice of alignment algorithm can significantly affect the identification of DEGs. Another study by Xu et al. (2020) evaluated the performance of different RNA-seq alignment
+algorithms for quantifying gene expression and showed that Salmon performed better than STAR for some metrics. A third study by Tarazona et al. (2015) compared different RNA-seq analysis pipelines and showed that different pipelines can lead to different results in terms of DEG identification and pathway enrichment analysis.
+
+Overall, the hypothesis is that applying Salmon and STAR alignment algorithms will result in different pathways being enriched.
+
+## Results
+
+*`Another brief paragraph summarizing your key insights and possible future experiments/analyses that might enhance your own analysis. Make sure to include a discussion of the limits that your data set has!`*
+
+1.  There appears to be no significant difference between the end results of both the algorithms when considering this particular functionality (Differential Expression Analysis).
+2.  This might be limited to well studied genomes. More research needs to be done on organisms that have not been indexed accurately.
+3.  Conducting Gene Ontology assessment requires prior knowledge about the over-represented pathways that pop-up in certain genomes often, making a note of these GO terms while interpreting the results of GO enrichment will keep one from being misled due to these biases.
+4.  Further well thought out GO analysis should be conducted on this dataset.
+
+#### Limitations:
+
+1.  The authors did not disclose what kind of pathway analysis they've performed in the paper. This lead to a lot of confusion due to a mismatch between my results and the paper's, post-EnrichKEGG.
+2.  The authors also did not mention dealing with over-represented pathways based on the gene-ratio bias.
+3.  The RNA-Seq analysis for this paper was delegated to the bioinformatics-core in Harvard explaining why the finer details for this step were not provided.
+
+## Methods
+
+*`A detailed verbose description of all the steps you took to arrive at the conclusion including how and where the data was downloaded, pre-processed and analyzed. This should also include some brief reasoning of why you chose certain tools/solutions and what the results of the QC tell you about the data at hand.`*
+
+1.  [Downloading Data & Basic QC]
+2.  [Downloading the .fastq files]
+3.  [Downloading the .fasta file for mm10 genome]
+4.  [Pre-alignment Basic QC]
+5.  [STAR Indexing & Alignment]
+6.  [STAR Post-alignment MultiQC]
+7.  [Downloading and Installing Salmon]
+8.  [Salmon Post-Alignment Multiqc]
+9.  [DESeq]
+10. [KEGG Pathway Enrichment]
+11. [List of genes mentioned to be differentially expressed]
+
+### Details about the project files
+
+-   **What publication is it linked to?**
+
+    **Ans:** The cited article is the source for this dataset:
+
+    > Li, S., & Jakobs, T. C. (2022). Secreted phosphoprotein 1 slows neurodegeneration and rescues visual function in mouse models of aging and glaucoma. *Cell reports*, *41*(13), 111880. <https://doi.org/10.1016/j.celrep.2022.111880>
+
+-   **Who generated the data?**
+
+    **Ans**: The authors Song Li and Tatjana C Jakobs produced the data. They are affiliated to the Department of Ophthalmology, Harvard Medical School, Boston.
+
+-   **Where can the dataset be found?**
+
+    Ans: On the Gene Expression Omnibus server: <https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE174522>
+
+-   **How was the RNA extracted?**
+
+    **Ans**: RNA was extracted using the RNeasy Plus Micro Kit (Qiagen; 74034)
+
+-   **What library prep was used?**
+
+    **Ans**: mRNA profiles were generated by deep sequencing using Illumina NovaSeq 6000
+
+-   **What cell type was used?**
+
+    **Ans**: Astrocytes isolated from either C57BL/6 wild-type or Spp1 KO neonatal mice were used
+
+-   **What was the treatment/experimental condition?**
+
+    **Ans**: The experimental condition was the knockout of Spp1
+
+-   **What sequencing platform was used?**
+
+    **Ans**: Illumina NovaSeq 6000 was used for sequencing
+
+### Downloading Data & Basic QC
+
+#### Downloading the `.fastq` files
+
+I have used the following script to download the fastq files from the `.tsv` file I've obtained from ENA. It was parsed to obtain the `.fastq` ftp links along-side the run accession number. The file contains the following links that have been parsed from the `.tsv` file from this [link](https://www.ebi.ac.uk/ena/browser/view/PRJNA730426):
+
+``` illustration
+$ wget "ftp://https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJNA730426&result=read_run&fields=run_accession,fastq_ftp,sample_title&format=tsv&download=true&limit=0" >> PRJNA730426.tsv
+
+$ cat PRJNA730426.tsv
+sample_accession        run_accession   fastq_ftp       sample_title
+SAMN19231497    SRR14563232     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/032/SRR14563232/SRR14563232_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/032/SRR14563232/SRR14563232_2.fastq.gz    wt_1
+SAMN19231496    SRR14563233     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/033/SRR14563233/SRR14563233_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/033/SRR14563233/SRR14563233_2.fastq.gz    wt_2
+SAMN19231495    SRR14563234     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/034/SRR14563234/SRR14563234_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/034/SRR14563234/SRR14563234_2.fastq.gz    wt_3
+SAMN19231494    SRR14563235     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/035/SRR14563235/SRR14563235_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/035/SRR14563235/SRR14563235_2.fastq.gz    wt_4
+SAMN19231493    SRR14563236     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/036/SRR14563236/SRR14563236_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/036/SRR14563236/SRR14563236_2.fastq.gz    SPP1 KO_1
+SAMN19231492    SRR14563237     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/037/SRR14563237/SRR14563237_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/037/SRR14563237/SRR14563237_2.fastq.gz    SPP1 KO_2
+SAMN19231491    SRR14563238     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/038/SRR14563238/SRR14563238_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/038/SRR14563238/SRR14563238_2.fastq.gz    SPP1 KO_3
+SAMN19231490    SRR14563239     ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/039/SRR14563239/SRR14563239_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/SRR145/039/SRR14563239/SRR14563239_2.fastq.gz    SPP1 KO_4
+
+cut -f 2,3,4 PRJNA730426.tsv > fastq_links.txt
+```
+
+Adding `ftp://` in front of each instance of `ftp` and removing the space after SPP1 in the sample_title column.
+
+``` illustration
+$ sed 's|ftp|ftp://ftp|g' fastq_links.txt >> ftp_links.txt
+
+$ sed 's|SPP1 |SPP1_|g' ftp_links.txt >>  ftp_links1.txt
+
+$ mv ftp_links1.txt ftp_links.txt
+```
+
+#### Downloading the .fasta file for mm10 genome
+
+`$ wget "ftp://ftp://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.fa.gz"`
+
+Copying the annotation `.gtf` file from my desktop obtained from the [UCSC genome table browser](https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/genes/mm10.ncbiRefSeq.gtf.gz) with the following options:
+
+-   clade: Mammal
+-   genome: Mouse
+-   group: Genes and Gene Predictions
+-   track: NCBI RefSeq
+-   table: RefSeq All
+-   region: genome
+-   output format: GTF
+-   Link: <https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/genes/mm10.ncbiRefSeq.gtf.gz>
+
+`% scp /Users/mar/Downloads/mm10.ncbiRefSeq.gtf moa4020@aphrodite.med.cornell.edu:/athena/angsd/scratch/moa4020/project/referenceGenome/mm10`
+
+I have used the following script to download and rename the `.fastq` files with the sample name.
+
+`$ sbatch $MyScripts/downloading_fastq.sh`
+
+``` {#downloading_fastq.sh .illustration}
+#!/bin/bash
+#SBATCH --job-name=downloading_fastq
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/downloading_fastq_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/downloading_fastq_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --mem=32G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=5
+
+sed '1d' ftp_links.txt > links.txt
+
+while read line; do
+  links=$(echo "$line" | cut -f 2)
+  url=$(echo "$links" | cut -d';' -f1)
+  sample_name=$(echo "$line" | cut -f 3)
+  echo "Downloading $url"
+  wget "$url" -O "${sample_name}_1.fastq.gz"
+done < links.txt
+
+while read line; do
+  links=$(echo "$line" | cut -f 2)
+  url=$(echo "$links" | cut -d';' -f2)
+  sample_name=$(echo "$line" | cut -f 3)
+  echo "Downloading $url"
+  wget "$url" -O "${sample_name}_2.fastq.gz"
+done < links.txt
+
+rm links.txt
+```
+
+### Pre-alignment Basic QC
+
+```{r}
+includeHTML("QC/pre_alignment_multiqc_report.html")
+```
+
+**Inference:** it is safe to say that there are no confounding effects that can be attributed to one of the conditions from these results. Although the least amount and the highest amount of reads seem to come from one of the samples in SPP1_KO and wt respectively the sample size is low and the difference is not uniform across both the conditions to assume that this might cause a bias.
+
+### STAR Indexing & Alignment
+
+I have used the following scripts to perform indexing and alignment:
+
+`$ sbatch $MyScripts/indexing.sh`
+
+``` {#indexing.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=STAR_genomeGenerate
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/STAR_genomeGenerate_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/STAR_genomeGenerate_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --time=10:00:00
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=10
+
+# activate your environment
+mamba activate angsd
+
+STAR --runMode genomeGenerate \
+     --runThreadN 10 \
+     --genomeDir /athena/angsd/scratch/moa4020/project/referenceGenome/GRCm38_STARindex \
+     --genomeFastaFiles /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.fa \
+     --sjdbGTFfile /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.ncbiRefSeq.gtf \
+     --sjdbOverhang 149
+     
+```
+
+The parameters used in the alignment command are explained below:
+
+-   `--runMode genomeGenerate`: This specifies the mode of the STAR program, which is genome generation in this case.
+
+-   `--runThreads`: This sets the number of threads used for the genome generation process.
+
+-   `--genomeDir /athena/angsd/scratch/moa4020/project/referenceGenome/GRCm38_STARindex`: This specifies the directory where the genome index will be saved.
+
+-   `--genomeFastaFiles /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.fa`: This specifies the path to the FASTA file of the genome reference sequence that will be used to generate the genome index.
+
+-   `--sjdbGTFfile /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.ncbiRefSeq.gtf`: This specifies the path to the GTF annotation file that will be used to guide the genome generation process.
+
+-   `--sjdbOverhang 149`: This specifies the length of the genomic sequence flanking the splice junctions that will be used to generate the genome index.
+
+`$ sbatch $MyScripts/STAR_alignment.sh`
+
+``` {#alignment.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=STAR_alignReads
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/STAR_alignReads_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/STAR_alignReads_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --time=10:00:00
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=15
+
+# Activate your environment
+mamba activate angsd
+
+IndexDir=/athena/angsd/scratch/moa4020/project/referenceGenome/GRCm38_STARindex
+
+fastaDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/fastq
+
+outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments
+
+# Make a table with the sample name and paths to the 1st and 2nd mate
+
+# Set the name of the output file
+sample_table=sample_table.txt
+
+> $sample_table
+
+# Iterate over the fastq files in the directory
+for file in ${fastaDir}/*_1.fastq.gz; do
+  file1=$(basename ${file})
+  sample=$(basename ${file%_1.fastq.gz})
+  file2=${sample}_2.fastq.gz
+  echo -e "${sample}\t${file1}\t${file2}" >> $sample_table
+done
+
+while read -r sample mate1 mate2
+do
+        echo "Processing sample: $sample"
+        STAR --runMode alignReads \
+             --runThreadN 15 \
+             --genomeDir $IndexDir \
+             --readFilesIn $fastaDir/$mate1 $fastaDir/$mate2 \
+             --readFilesCommand zcat \
+             --outFileNamePrefix $outDir/"$sample." \
+             --outSAMtype BAM SortedByCoordinate \
+             --outSAMunmapped Within \
+             --outSAMattributes All
+
+done < $sample_table
+
+samtools index -M $outDir/*.out.bam
+```
+
+The parameters used in the alignment command are explained below:
+
+-   `--runMode alignReads`: This parameter specifies the mode in which STAR should run, which in this case is to align reads.
+
+-   `--runThreadN`: This parameter specifies the number of threads that should be used for the alignment, which in this case is 10. Using multiple threads can speed up the alignment process.
+
+-   `--genomeDir`: This parameter specifies the directory where the genome index files are located.
+
+-   `--readFilesIn`: This parameter specifies the input FASTQ file that contains the reads to be aligned.
+
+-   `--readFilesCommand zcat`: This parameter specifies the command that should be used to decompress the input FASTQ file. In this case, `zcat` is used to decompress a gzipped file.
+
+-   `--outFileNamePrefix`: This parameter specifies the prefix to be used for the output files.
+
+-   `--outSAMtype BAM SortedByCoordinate`: This parameter specifies the format of the output SAM/BAM file, which in this case is BAM, sorted by coordinate.
+
+-   `--outSAMunmapped Within`: This parameter specifies that unmapped reads should be included in the output file, but marked as "within" the aligned reads.
+
+-   `--outSAMattributes All`: This parameter specifies which attributes should be included in the output SAM/BAM file.
+
+Performing alignment once again using the novel splice junction data obtained from the first iteration of alignment to improve the accuracy of gene expression data.
+
+`$ sbatch $MyScripts/STAR_2alignment.sh`
+
+``` {#2alignment.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=STAR_alignReads_it2
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/STAR_alignReads_it2_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/STAR_alignReads_it2_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --time=10:00:00
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=15
+
+# Activate your environment
+mamba activate angsd
+
+IndexDir=/athena/angsd/scratch/moa4020/project/referenceGenome/GRCm38_STARindex
+
+fastaDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/fastq
+
+it1Dir=athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments
+
+outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2
+
+# Make a table with the sample name and paths to the 1st and 2nd mate
+
+# Set the name of the output file
+sample_table=sample_table.txt
+
+> $sample_table
+
+# Iterate over the fastq files in the directory
+for file in ${fastaDir}/*_1.fastq.gz; do
+  file1=$(basename ${file})
+  sample=$(basename ${file%_1.fastq.gz})
+  file2=${sample}_2.fastq.gz
+  echo -e "${sample}\t${file1}\t${file2}" >> $sample_table
+done
+
+while read -r sample mate1 mate2
+do
+        echo "Processing sample: $sample"
+        STAR --runMode alignReads \
+             --runThreadN 15 \
+             --genomeDir $IndexDir \
+             --sjdbFileChrStartEnd $it1Dir/*.SJ.out.tab \
+             --readFilesIn $fastaDir/$mate1 $fastaDir/$mate2 \
+             --readFilesCommand zcat \
+             --outFileNamePrefix $outDir/"$sample.it2." \
+             --outSAMtype BAM SortedByCoordinate \
+             --outSAMunmapped Within \
+             --outSAMattributes All
+
+done < $sample_table
+
+samtools index -M $outDir/*it2.*.out.bam
+```
+
+### Pre-lim QC
+
+**Running samtools flagstat and stats function on all the .bam files**
+
+`$ sbatch $MyScripts/flagstat.sh`
+
+``` {#flagstat.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=STAR_flagstat
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/STAR_flagstat_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/STAR_flagstat_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+# Activate your environment
+mamba activate angsd
+
+outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/alignment_it2_files
+
+# Iterate over the fastq files in the directory
+for file in /athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/alignment_it2_files/*/*.out.bam; do
+  filename=$(basename ${file})
+  foldername=$(echo $filename | cut -d ".it2" -f 1)
+  samtools flagstat ${file} > ${outDir}/${foldername}/${filename}.flagstat.txt
+  samtools stats ${file} > ${outDir}/${foldername}/${filename}.stats.txt
+  echo "$filename done"
+done
+```
+
+### Counting reads
+
+I have used the following script to run the featureCounts command -
+
+`$ sbatch $MyScripts/featureCounts.sh`:
+
+``` {#featureCounts.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=featureCounts
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/featureCounts_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/featureCounts_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --time=10:00:00
+#SBATCH --mem=32G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=15
+
+# Activate your environment
+mamba activate angsd
+
+AnnotationFile=/athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.ncbiRefSeq.gtf
+
+bamDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/alignment_it2_files/*
+
+outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/featureCounts
+
+featureCounts -p -g gene_id -t exon --countReadPairs -T 10 -a $AnnotationFile -o ${outDir}/Counts.txt ${bamDir}/*.it2.Aligned.sortedByCoord.out.bam
+```
+
+The command is explained below:
+
+-   `-p`: Indicates that the input BAM files are paired-end reads.
+
+-   `-g gene_id`: Specifies the feature type to be counted.
+
+-   `-T 10`: Sets the number of threads used by `featureCounts` to 10.
+
+-   `-a $AnnotationFile`: Specifies the annotation file to be used.
+
+-   `-o counts.txt`: Specifies the output file name.
+
+**Generating a bar plot (using ggplot2) that displays the numbers of assigned and unassigned reads for the featureCounts run:**
+
+```{r}
+mySummary <- read.table("STAR/featureCounts/Counts.txt.summary")
+colNames <- sapply(mySummary[1,], function(x) gsub(".it2.Aligned.sortedByCoord.out.bam", "", basename(x)))
+colnames(mySummary) <- colNames
+mySummary <- as.data.frame(mySummary[-1,])
+
+# Melt the data and convert the value column to numeric
+long_mySummary <- melt(setDT(mySummary), id.vars = "Status")
+long_mySummary[, value := as.numeric(value)]
+
+# Remove zero value rows
+long_mySummary <- filter(long_mySummary, value != 0)
+long_mySummary
+```
+
+```{r}
+ggplot(data = long_mySummary, aes(x = value, y = variable, fill = Status)) + geom_bar(stat = "identity", position = 'dodge') + labs(x = "# reads", y = "samples") +
+  ggtitle("Counts.txt.summary")
+```
+
+**Inference:** The total percentages of assigned reads for all the samples are comparable. The alignment appears to be successful.
+
+### **Running RSeQC**
+
+I have downloaded the housekeeping `.bed` file for mm10 from this [link](https://sourceforge.net/projects/rseqc/files/BED/Mouse_Mus_musculus/mm10.HouseKeepingGenes.bed.gz/download) and imported it to my work-space using the `scp` command.
+
+I have used the following scripts to run `rseqc`:
+
+`$ sbatch $MyScripts/genebody_coverage.sh`
+
+``` {#genebody_coverage.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=genebody_coverage
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/genebody_coverage_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/genebody_coverage_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --time=90:00:00
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=15
+
+mamba activate rseqc
+
+bamDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/alignment_it2_files/*
+
+bedFile=/athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.HouseKeepingGenes.bed
+
+outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/rseqc
+
+# Iterate over the bam files in the directory
+for file in ${bamDir}/*.it2.Aligned.sortedByCoord.out.bam; do
+        filename=$(basename ${file})
+        #read_distribution.py -i $file -r $bedFile > ${outDir}/${filename}rseqc_read_distribution.out
+        geneBody_coverage.py -i $file -r $bedFile -o ${outDir}/${filename}rseqc_geneBodyCoverage.txt
+done
+```
+
+`$ sbatch $MyScripts/read_distribution.sh`
+
+``` {#read_distribution.sh .illustration}
+#!/bin/bash -l
+#SBATCH --job-name=read_distribution
+#SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/read_distribution_%j.out
+#SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/read_distribution_%j.err
+#SBATCH --mail-user=moa4020@med.cornell.edu
+#SBATCH --mail-type=ALL
+#SBATCH --time=10:00:00
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=15
+
+mamba activate rseqc
+
+bamDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/alignment_it2_files/*
+
+bedFile=/athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.ncbiRefSeq.bed
+
+outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/STAR_alignments_it2/rseqc
+
+# Iterate over the bam files in the directory
+for file in ${bamDir}/*.it2.Aligned.sortedByCoord.out.bam; do
+        filename=$(basename ${file})
+        read_distribution.py -i $file -r $bedFile > ${outDir}/${filename}rseqc_read_distribution.out
+        #geneBody_coverage.py -i $file -r $bedFile -o ${outDir}/${filename}rseqc_geneBodyCoverage.txt
+done
+```
+
+#### **Running multiqc post-alignment and RSeQC:**
+
+    mamba activate multiqc
+    multiqc .
+
+### STAR Post-alignment MultiQC
+
+```{r message=FALSE, warning=FALSE}
+includeHTML("STAR_multiqc_report.html")
+```
+
+Inference: An average of 45-50 million transcripts were assigned to the exonic regions of the genome. The gene body coverage for all the samples appears to have a uniform trend. The alignment was successful and no bias was observed towards one condition.
+
+### Downloading and Installing Salmon
+
+    $ conda config --add channels conda-forge
+    $ conda config --add channels bioconda
+    $ conda create -n salmon salmon
+    # Activating salmon
+    $ conda activate salmon
+
+### Building the reference transcriptome and genome for salmon indexing
+
+Converting a `.gtf` file to a `txdb` object to produce a transcriptome file using the following code:
+
+```{r eval=FALSE}
+#' Export Transcriptome as FASTA
+#'
+#' @param txdb a \code{TxDb} object representing a transcriptome annotation
+#' @param genome a \code{BSgenome} object from which to extract sequences
+#' @param file a string for output FASTA file. File names ending in "**.gz**"
+#'     will automatically use gzip compression.
+#' @param ... additional arguments to pass through to
+#'     \code{\link[Biostrings]{writeXStringSet}}
+#' @return The \code{txdb} argument is invisibly returned.
+#'
+#' @examples
+#' library(TxDb.Scerevisiae.UCSC.sacCer3.sgdGene)
+library(BSgenome.Mmusculus.UCSC.mm10)
+#'
+#' ## load annotation and genome
+txdb <- GenomicFeatures::makeTxDbFromGFF('Downloaded_Data/mm10.ncbiRefSeq.gtf')
+mm10 <- BSgenome.Mmusculus.UCSC.mm10
+#'
+#' ## restrict to 'chrI' transcripts (makes for briefer example runtime)
+#' seqlevels(txdb) <- c("chrI")
+#'
+#' ## last 500 nts per tx
+#' txdb_w500 <- truncateTxome(txdb)
+#'
+#' ## export uncompressed
+#' outfile <- tempfile("sacCer3.sgdGene.w500", fileext=".fa")
+#' exportFASTA(txdb_w500, sacCer3, outfile)
+#'
+#' ## export compressed
+#' outfile <- tempfile("sacCer3.sgdGene.w500", fileext=".fa.gz")
+#' exportFASTA(txdb_w500, sacCer3, outfile)
+#'
+#' @importFrom GenomicFeatures extractTranscriptSeqs
+#' @importFrom Biostrings writeXStringSet
+#' @export
+exportFASTA <- function (txdb, genome, file, ...) {
+  seqs <- extractTranscriptSeqs(genome, txdb, use.names=TRUE)
+  compress <- grepl(".gz$", file)
+  writeXStringSet(seqs, file, format="fasta", compress=compress, ...)
+  invisible(txdb)
+}
+
+exportFASTA(txdb,mm10,"mm10.transcriptome.fa.gz")
+```
+
+### Preparing metadata
+
+Salmon indexing requires the names of the genome targets, which is extractable by using the `grep` command:
+
+    $ grep "^>" <(gunzip -c /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.fa.gz) | cut -d " " -f 1 > /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/decoys.txt
+    $ sed -i.bak -e 's/>//g' /athena/angsd/scratch/moa4020/project/referenceGenome/mm10/decoys.txt
+
+Along with the list of decoys salmon also needs the concatenated transcriptome and genome reference file for index. NOTE: the genome targets (decoys) should come after the transcriptome targets in the reference
+
+    $ cat $MyProject/referenceGenome/mm10/mm10.transcriptome.fa.gz $MyProject/referenceGenome/mm10/mm10.fa.gz > $MyProject/referenceGenome/mm10/mm10_gentrome.fa.gz
+
+### Salmon Indexing
+
+`$ sbatch $MyScripts/salmon_indexing.sh`
+
+    #!/bin/bash -l
+    #SBATCH --job-name=salmon_indexing
+    #SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/salmon_indexing_%j.out
+    #SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/salmon_indexing_%j.err
+    #SBATCH --mail-user=moa4020@med.cornell.edu
+    #SBATCH --mail-type=ALL
+    #SBATCH --time=10:00:00
+    #SBATCH --mem=40G
+    #SBATCH --nodes=1
+    #SBATCH --ntasks-per-node=1
+    #SBATCH --cpus-per-task=15
+
+    mamba activate salmon
+
+    refDir=/athena/angsd/scratch/moa4020/project/referenceGenome/mm10
+    outDir=/athena/angsd/scratch/moa4020/project/referenceGenome/Salmonindex
+
+    salmon index -t $refDir/mm10_gentrome.fa.gz -d $refDir/decoys.txt -p 15 -i $outDir
+
+### Salmon Mapping
+
+`$ sbatch $MyScripts/salmon_mapping.sh`
+
+    #!/bin/bash -l
+    #SBATCH --job-name=salmon_mapping
+    #SBATCH --output=/home/moa4020/angsd/project/scripts/stdout/salmon_mapping%j.out
+    #SBATCH --error=/home/moa4020/angsd/project/scripts/stderr/salmon_mapping%j.err
+    #SBATCH --mail-user=moa4020@med.cornell.edu
+    #SBATCH --mail-type=ALL
+    #SBATCH --time=10:00:00
+    #SBATCH --mem=40G
+    #SBATCH --nodes=1
+    #SBATCH --ntasks-per-node=1
+    #SBATCH --cpus-per-task=15
+
+    mamba activate salmon
+
+    indexDir=/athena/angsd/scratch/moa4020/project/referenceGenome/Salmonindex
+
+    fastqDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/fastq
+
+    outDir=/athena/angsd/scratch/moa4020/project/GEO_Dataset/salmon_alignments
+
+    gtfFile=/athena/angsd/scratch/moa4020/project/referenceGenome/mm10/mm10.ncbiRefSeq.gtf
+
+    # Make a table with the sample name and paths to the 1st and 2nd mate
+
+    # Set the name of the output file
+    sample_table=sample_table.txt
+
+    > $sample_table
+
+    # Iterate over the fastq files in the directory
+    for file in ${fastqDir}/*_1.fastq.gz; do
+      file1=$(basename ${file})
+      sample=$(basename ${file%_1.fastq.gz})
+      file2=${sample}_2.fastq.gz
+      echo -e "${sample}\t${file1}\t${file2}" >> $sample_table
+      done
+
+    while read -r sample mate1 mate2
+    do
+          echo "Processing sample: $sample"
+          salmon quant -g $gtfFile -i $indexDir -l A -1 $fastqDir/$mate1 -2 $fastqDir/$mate2 -p 15  --validateMappings --writeUnmappedNames -o $outDir/"$sample"
+
+    done < $sample_table
+
+### Salmon Post-Alignment Multiqc
+
+```{r echo=FALSE}
+includeHTML("Salmon_multiqc_report.html")
+```
+
+**Inference:** from the above QC post salmon mapping, the percent of aligned reads indicates a successful feature counting run.
+
+### DESeq
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+FILE_DSD="DESeqReadyFiles.RData"
+load(FILE_DSD)
+
+DESeq.ds <- DESeq(DESeq.ds)
+
+salmon_DESeq.ds <- DESeq(salmon_DESeq.ds)
+```
+
+```{r}
+rlog.dge <- DESeq.rlog[DGEgenes,] %>% assay
+salmon_rlog.dge <- salmon_DESeq.rlog[salmon_DGEgenes,] %>% assay
+# Sanity check to see if both the conditions actually lead to 2 different clusters
+DESeq2::plotPCA(DESeq.rlog, intgroup = "condition", ntop = 500, returnData = FALSE)
+DESeq2::plotPCA(salmon_DESeq.rlog, intgroup = "condition", ntop = 500, returnData = FALSE)
+```
+
+```{r}
+pheatmap(rlog.dge, scale="row",
+         show_rownames=FALSE, main="STAR DGE (row-based z-score)")
+pheatmap(salmon_rlog.dge, scale="row",
+         show_rownames=FALSE, main="Salmon DGE (row-based z-score)")
+```
+
+```{r fig.height=6, fig.width=8}
+STAR_vp <- EnhancedVolcano(DGE.results.shrnk, lab=rownames(DGE.results.shrnk),
+                       x='log2FoldChange', y='padj', pCutoff = 0.05,
+                       title="STAR (with logFC shrinkage)")
+  
+Salmon_vp <- EnhancedVolcano(salmon_DGE.results.shrnk, lab=rownames(salmon_DGE.results.shrnk),
+                       x='log2FoldChange', y='padj', pCutoff = 0.05,
+                       title="Salmon (with logFC shrinkage)")
+STAR_vp + Salmon_vp
+
+```
+
+These volcano plots confer with the volcano plot produced in the literature for this dataset.
+
+![](Volcano_mm3.png)
+
+```{r echo=TRUE}
+
+DGE.results %>% `[`(order(.$padj),) %>% head
+
+salmon_DGE.results %>% `[`(order(.$padj),) %>% head
+```
+
+```{r}
+DGE.genes <- subset(DGE.results, log2FoldChange > 1.5 &  padj < 0.05)
+
+DGE.genes  %>% `[`(order(.$padj),) %>% head
+
+salmon_DGE.genes <- subset(salmon_DGE.results,log2FoldChange > 1.5 & padj < 0.05)
+
+salmon_DGE.genes  %>% `[`(order(.$padj),) %>% head
+```
+
+### KEGG Pathway Enrichment
+
+```{r}
+orgdb <- org.Mm.eg.db
+
+txdb <- TxDb.Mmusculus.UCSC.mm10.ensGene
+
+keytypes(txdb)
+
+gene.vector <- AnnotationDbi::select(orgdb, keys=row.names(DGE.genes), columns= c('ENTREZID','ENSEMBL'), keytype="SYMBOL", multiVals="first")
+
+head(gene.vector)
+
+STAR_Enrichment <- enrichKEGG(
+  gene.vector[,2],
+  organism = "mmu",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 10,
+  maxGSSize = 500,
+  qvalueCutoff = 0.2,
+  use_internal_data = FALSE
+)
+```
+
+```{r eval=TRUE}
+
+salmon_gene.vector <- AnnotationDbi::select(orgdb, keys=row.names(salmon_DGE.genes), columns= c('ENTREZID','ENSEMBL'), keytype="SYMBOL")
+
+head(salmon_gene.vector)
+
+salmon_Enrichment <- enrichKEGG(
+  salmon_gene.vector[,2],
+  organism = "mmu",
+  keyType = "kegg",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  qvalueCutoff = 0.2,
+  minGSSize = 10,
+  maxGSSize = 500,
+  use_internal_data = FALSE
+)
+```
+
+```{r fig.height=5, fig.width=3}
+#autophagy is in the list
+dotplot(STAR_Enrichment)
+dotplot(salmon_Enrichment)
+```
+
+```{r}
+STAR_Enrichment@result[["Description"]][1:20]
+```
+
+```{r}
+salmon_Enrichment@result[["Description"]][1:20]
+```
+
+```{r}
+# create an empty vector to store the values
+values <- numeric(333)
+
+# loop over all values of x from 1 to 333
+for (x in 1:333) {
+  # calculate the value of the equation for the current value of x
+  value <- length(intersect(salmon_Enrichment@result[["Description"]][1:x],STAR_Enrichment@result[["Description"]][1:x]))
+  # store the value in the vector
+  values[x] <- value/x
+}
+
+plot(values, type = "l", xlab = "x", ylab = "Identity")
+
+plot(values[1:40], type = "l", xlab = "x", ylab = "Identity")
+
+plot(values[1:10], type = "l", xlab = "x", ylab = "Identity")
+
+```
+
+### **List of genes mentioned to be differentially expressed**
+
+| Pan Reactive | A1-Specific | A2-Specific |
+|--------------|-------------|-------------|
+| Lcn2         | H2-T23      | Clcf1       |
+| Steap4       | Serping1    | Tgm1        |
+| S1pr3        | H2-D1       | Ptx3        |
+| Timp1        | Ggta1       | S100a10     |
+| Hspb1        | Iigp1       | Sphk1       |
+| Cxcl10       | Gbp2        | Cd109       |
+| Cd44         | Fbln5       | Ptgs2       |
+| Osmr         | Ugt1a1      | Emp1        |
+| Cp           | Fkbp5       | Tm4sf1      |
+| Serpina3n    | Psmb8       | Cd14        |
+| Aspg         | Srgn        | B3gnt5      |
+| Vim          | Amigo2      |             |
+| Gfap         |             |             |
+
+```{r}
+DEGs <- read.csv(file="DEG_Paper.csv", header = TRUE)
+PanReactive <- DEGs[,1]
+PanCounts <- counts(DESeq.ds[PanReactive, ])
+
+A1Specific <- DEGs[1:12,2]
+A1Counts <- counts(DESeq.ds[A1Specific, ])
+
+A2Specific <- DEGs[1:11,3]
+A2Counts <- counts(DESeq.ds[A2Specific, ])
+```
+
+### Pan Reactive Genes Up-regulated in SPP1_KO samples
+
+```{r}
+
+for(gene in PanReactive){
+  par(mfrow=c(1,2))
+  plotCounts(DESeq.ds, gene=gene, normalized = TRUE, xlab="STAR")
+  plotCounts(salmon_DESeq.ds, gene = gene, normalized = TRUE, xlab="Salmon", main = gene)
+}
+```
+
+### A1-Specific Genes Up-regulated in SPP1_KO samples
+
+```{r}
+for(gene in A1Specific){
+  par(mfrow=c(1,2))
+  plotCounts(DESeq.ds, gene=gene, normalized = TRUE, xlab="STAR")
+  plotCounts(salmon_DESeq.ds, gene = gene, normalized = TRUE, xlab="Salmon", main = gene)
+}
+```
+
+### No particular trend observed in A2-Specific Genes in SPP1_KO samples
+
+```{r}
+for(gene in A2Specific){
+  par(mfrow=c(1,2))
+  plotCounts(DESeq.ds, gene=gene, normalized = TRUE, xlab="STAR")
+  plotCounts(salmon_DESeq.ds, gene = gene, normalized = TRUE, xlab="Salmon", main = gene)
+}
+```
+
+The individual gene count-plots confer with the results from the study performed.
+
+![](Gene_expression_mm3.png)
+
+### Discussion
+
+*`A brief description/list of issues/problems/limitations you encountered along the way and how you addressed them.`*
+
+1.  While creating an index using the "knowngene" version of the `.gtf` file lead to counting just the transcripts and not the genes since this file did not contain any gene_ids. I dealt with this problem by re-indexing the mm10 genome for both the algorithms using the `ncbiRefSeq.gtf` file from the UCSC table browser.
+2.  Performing the Gene Ontology analysis on the DESeq data turned out to be misleading since I did not apply the log2FC cutoff of 1.5. I corrected this by filtering out genes which have less than 1.5 log2FC.
+3.  Adding the log2FC filter did not help produce identical pathway enrichment results displayed in the paper.
+
+*`A table that summarizes the key data sets that you have generated during the analyses and decided to keep.`*
+
+#### Key datasets used in this study
+
+1.  ncbiRefSeq GTF file: <https://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/genes/mm10.ncbiRefSeq.gtf.gz>
+2.  mm10 fasta file: [http://ftp://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.fa.gz](ftp://ftp://hgdownload.soe.ucsc.edu/goldenPath/mm10/bigZips/mm10.fa.gz)
+3.  GEO Dataset: <https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE174522>
+4.  Metadata TSV file: <https://www.ebi.ac.uk/ena/browser/view/PRJNA730426>
+5.  Research Article: <https://doi.org/10.1016/j.celrep.2022.111880>

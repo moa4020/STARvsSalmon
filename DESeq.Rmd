@@ -1,0 +1,610 @@
+---
+title: "DESeq"
+author: "Mohith Reddy Arikatla (NETID - ma995, CWID: moa4020)"
+date: "2023-04-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DESeq2)
+library(magrittr)
+library(edgeR)
+library(goseq)
+library(dplyr)
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+#BiocManager::install("TxDb.Mmusculus.UCSC.mm10.knownGene")
+library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+library(ggplot2)
+#BiocManager::install("pheatmap")
+library(pheatmap)
+#BiocManager::install("EnhancedVolcano")
+library(EnhancedVolcano)
+#BiocManager::install("apeglm")
+library(apeglm)
+library(patchwork)
+```
+
+### Running DESeq
+
+#### 1. Loading files from both algorithms
+
+##### First STAR mappinngs passed through featureCounts
+
+```{r}
+readcounts <- read.table("/Users/mar/Documents/GitHub/ANGSD_PROJECT_MOA4020/Project/STAR/featureCounts/Counts.txt", header=TRUE)
+
+names(readcounts) <- gsub(".it2.Aligned.sortedByCoord.out.bam", "", gsub("X.athena.angsd.scratch.moa4020.project.GEO_Dataset.STAR_alignments_it2.alignment_it2_files.\\w+\\.","",names(readcounts)))
+
+str(readcounts)
+```
+
+Making a new matrix with just the counts and the transcript IDs for the row names
+
+```{r}
+length(unique(readcounts[,1]))
+length(readcounts[,1])
+
+grouped_readcounts <- readcounts[,7:14]
+
+row.names(grouped_readcounts) <- readcounts[,1]
+```
+
+Saving sample info for reference
+
+```{r}
+
+sample_info <- data.frame(condition = gsub("_[0-9]+", "", colnames(grouped_readcounts)), row.names = colnames(grouped_readcounts))
+
+sample_info
+
+str(sample_info)
+```
+
+##### Now Salmon counts
+
+```{r}
+wd <- getwd()
+
+filenames <- list.files(path = paste0(wd,"/Salmon"),recursive = TRUE,pattern="quant.genes.sf")
+filepaths <- list.files(path = paste0(wd,"/Salmon"),recursive = TRUE,pattern="quant.genes.sf",full.names = TRUE)
+
+# Copying transcript names from one file for salmonResultMatrix's row names
+salmonTest <- read.csv(file=filepaths[8], sep = "\t")
+
+salmonResultMatrix <- matrix(nrow=nrow(salmonTest),ncol=length(filenames)+1)
+row.names(salmonResultMatrix) <- salmonTest[,1]
+
+# iterate through all the quant.sf files and add the count values under each replicate
+for(i in 1:length(filepaths)){
+  salmonResultMatrix[,i+1] <- read.csv(file=filepaths[i], sep = "\t")[,5]
+}
+
+# Adding column names for salmonResultMatrix
+
+colnames(salmonResultMatrix) <- c("Length",gsub("/quant.genes.sf","",filenames))
+
+# Copying transcript length data from the test file
+salmonResultMatrix[,1] <- salmonTest[,2]
+
+# Copying just the count values to a new matrix - salmonCounts
+
+salmonCounts <- salmonResultMatrix[,-1]
+
+# Removing transcript version details from row names
+rownames(salmonCounts) <- sub("\\..*", "", rownames(salmonCounts))
+
+# Saving a reference of the condition for each sample
+salmon_sample_info <- data.frame(condition = gsub("_[0-9]+", "", colnames(salmonCounts)), row.names = colnames(salmonCounts))
+
+nrow(salmonCounts)
+
+salmon_sample_info
+
+str(salmon_sample_info)
+```
+
+Converting the read counts into integers and adding the row and column names
+
+```{r}
+salmonCountData <- matrix(as.integer(ceiling(as.numeric(salmonCounts))), ncol = 8)
+row.names(salmonCountData) <- row.names(salmonCounts)
+colnames(salmonCountData) <- colnames(salmonCounts)
+```
+
+Creating a DESeq object from both the results
+
+```{r}
+DESeq.ds <- DESeqDataSetFromMatrix(countData = grouped_readcounts, 
+                                   colData = sample_info,
+                                   design = ~ condition)
+
+DESeq.ds
+```
+
+```{r}
+salmon_DESeq.ds <- DESeqDataSetFromMatrix(countData = salmonCountData, 
+                                   colData = salmon_sample_info,
+                                   design = ~ condition)
+
+salmon_DESeq.ds
+```
+
+```{r}
+head(counts(DESeq.ds))
+
+colSums(counts(DESeq.ds))
+
+par(las=2)
+colSums(counts(DESeq.ds)) %>% barplot(main = "STAR")
+
+dim(DESeq.ds)
+```
+
+```{r}
+head(counts(salmon_DESeq.ds))
+
+colSums(counts(salmon_DESeq.ds))
+
+par(las=2)
+colSums(counts(salmon_DESeq.ds)) %>% barplot(main = "Salmon")
+
+dim(salmon_DESeq.ds)
+```
+
+Removing genes with no counts in all the samples:
+
+```{r}
+
+keep_genes <- rowSums(counts(DESeq.ds)) > 0
+
+DESeq.ds <- DESeq.ds[ keep_genes, ]
+
+dim(DESeq.ds)
+
+counts(DESeq.ds) %>% str
+
+assay(DESeq.ds) %>% str
+```
+
+```{r}
+salmon_keep_genes <- rowSums(counts(salmon_DESeq.ds)) > 0
+
+salmon_DESeq.ds <- salmon_DESeq.ds[ salmon_keep_genes, ]
+
+dim(salmon_DESeq.ds)
+
+counts(salmon_DESeq.ds) %>% str
+
+assay(salmon_DESeq.ds) %>% str
+```
+
+```{r}
+
+DESeq.ds <- estimateSizeFactors(DESeq.ds) # calculate SFs, add them to object
+plot( sizeFactors(DESeq.ds), colSums(counts(DESeq.ds)), # assess them
+ylab = "library sizes", xlab = "size factors", cex = .6 , main="STAR")
+```
+
+```{r}
+salmon_DESeq.ds <- estimateSizeFactors(salmon_DESeq.ds) # calculate SFs, add them to object
+plot(sizeFactors(salmon_DESeq.ds), colSums(counts(salmon_DESeq.ds)), # assess them
+ylab = "library sizes", xlab = "size factors", cex = .6, main="Salmon")
+```
+
+```{r}
+
+## bp of non-normalized
+boxplot(log2(counts(DESeq.ds) +1), notch=TRUE,
+main = "STAR Non-normalized read counts",
+ylab ="log2(read counts)", cex = .6)
+
+## bp of size-factor normalized values
+boxplot(log2(counts(DESeq.ds, normalized=TRUE)+1), notch=TRUE,
+main = "STAR Size-factor-normalized read counts",
+ylab ="log2(read counts)", cex = .6)
+```
+
+```{r}
+## bp of non-normalized
+boxplot(log2(counts(salmon_DESeq.ds)+1), notch=TRUE,
+main = "Salmon Non-normalized read counts",
+ylab ="log2(read counts)", cex = .6)
+
+## bp of size-factor normalized values
+boxplot(log2(counts(salmon_DESeq.ds, normalized=TRUE)+1), notch=TRUE,
+main = "Salmon Size-factor-normalized read counts",
+ylab ="log2(read counts)", cex = .6)
+```
+
+```{r}
+## non-normalized read counts plus pseudocount
+log.counts <- log2(counts(DESeq.ds, normalized = FALSE) + 1)
+
+## instead of creating a new object, we could assign the values to a distinct matrix
+## within the DESeq.ds object
+assay(DESeq.ds, "log.counts") <- log2(counts(DESeq.ds, normalized = FALSE) + 1)
+
+## normalized read counts
+assay(DESeq.ds, "log.norm.counts") <- log2(counts(DESeq.ds, normalized=TRUE) + 1)
+
+DESeq.ds[, c("wt_1","wt_2")] %>%
+assay(., "log.norm.counts") %>%
+plot(., cex=.1, main = "wt_1 vs. wt_2")
+DESeq.ds[, c("SPP1_KO_1","SPP1_KO_2")] %>%
+assay(., "log.norm.counts") %>%
+plot(., cex=.1, main = "SPP1_KO_1 vs SPP1_KO_2")
+```
+
+```{r}
+## non-normalized read counts plus pseudocount
+log.counts <- log2(counts(salmon_DESeq.ds, normalized = FALSE) + 1)
+
+## instead of creating a new object, we could assign the values to a distinct matrix
+## within the DESeq.ds object
+assay(salmon_DESeq.ds, "log.counts") <- log2(counts(salmon_DESeq.ds, normalized = FALSE) + 1)
+
+## normalized read counts
+assay(salmon_DESeq.ds, "log.norm.counts") <- log2(counts(salmon_DESeq.ds, normalized=TRUE) + 1)
+
+salmon_DESeq.ds[, c("wt_1","wt_2")] %>%
+assay(., "log.norm.counts") %>%
+plot(., cex=.1, main = "wt_1 vs. wt_2")
+salmon_DESeq.ds[, c("SPP1_KO_1","SPP1_KO_2")] %>%
+assay(., "log.norm.counts") %>%
+plot(., cex=.1, main = "SPP1_KO_1 vs SPP1_KO_2")
+```
+
+```{r}
+
+## generate the plot
+msd_plot <- vsn::meanSdPlot(assay(DESeq.ds, "log.norm.counts"), 
+                            ranks=FALSE, # show the data on the original scale
+                            plot = FALSE)
+msd_plot$gg + 
+  ggtitle("Sequencing depth normalized log2(read counts)") + 
+  ylab("standard deviation")
+```
+
+```{r}
+
+## generate the plot
+msd_plot <- vsn::meanSdPlot(assay(salmon_DESeq.ds, "log.norm.counts"), 
+                            ranks=FALSE, # show the data on the original scale
+                            plot = FALSE)
+msd_plot$gg + 
+  ggtitle("Sequencing depth normalized log2(read counts)") + 
+  ylab("standard deviation")
+```
+
+```{r}
+DESeq.rlog <- rlog(DESeq.ds, blind = TRUE)
+
+par(mfrow=c(1,2))
+plot(assay(DESeq.ds, "log.norm.counts")[,1:2], cex=.1,
+     main = "size factor and log2-transformed")
+## the rlog-transformed counts are stored in the "assay" accessor
+plot(assay(DESeq.rlog)[,1:2],
+     cex=.1, main = "rlog transformed",
+     xlab = colnames(assay(DESeq.rlog[,1])),
+     ylab = colnames(assay(DESeq.rlog[,2])) )
+```
+
+```{r}
+salmon_DESeq.rlog <- rlog(salmon_DESeq.ds, blind = TRUE)
+
+par(mfrow=c(1,2))
+plot(assay(salmon_DESeq.ds, "log.norm.counts")[,1:2], cex=.1,
+     main = "size factor and log2-transformed")
+## the rlog-transformed counts are stored in the "assay" accessor
+plot(assay(salmon_DESeq.rlog)[,1:2],
+     cex=.1, main = "rlog transformed",
+     xlab = colnames(assay(salmon_DESeq.rlog[,1])),
+     ylab = colnames(assay(salmon_DESeq.rlog[,2])) )
+```
+
+```{r}
+rlog.norm.counts <- assay(DESeq.rlog)
+## rlog-transformed read counts
+msd_plot <- vsn::meanSdPlot(assay(DESeq.rlog), ranks=FALSE, plot = FALSE)
+msd_plot$gg + ggtitle("Following rlog transformation") +
+  coord_cartesian(ylim = c(0,3))
+```
+
+```{r}
+salmon_rlog.norm.counts <- assay(salmon_DESeq.rlog)
+## rlog-transformed read counts
+salmon_msd_plot <- vsn::meanSdPlot(assay(salmon_DESeq.rlog), ranks=FALSE, plot = FALSE)
+salmon_msd_plot$gg + ggtitle("Following rlog transformation") +
+  coord_cartesian(ylim = c(0,3))
+```
+
+```{r}
+
+DESeq.ds
+
+DESeq.ds$condition
+
+salmon_DESeq.ds
+
+salmon_DESeq.ds$condition
+```
+
+```{r}
+DESeq.ds$condition %<>% relevel(ref="wt")
+DESeq.ds$condition
+
+salmon_DESeq.ds$condition %<>% relevel(ref="wt")
+salmon_DESeq.ds$condition
+```
+
+```{r}
+design(DESeq.ds)
+DESeq.ds %<>% DESeq()
+# normalize for diffs in sequencing depth and abundance per sample
+DESeq.ds %<>% estimateSizeFactors()
+# gene-wise dispersion estimates across all samples
+DESeq.ds %<>% estimateDispersions()
+# fit a neg. binomial GLM and compute Wald stat for each gene 
+DESeq.ds %<>% nbinomWaldTest()
+
+DESeq.ds
+```
+
+```{r}
+design(salmon_DESeq.ds)
+salmon_DESeq.ds %<>% DESeq()
+# normalize for diffs in sequencing depth and abundance per sample
+salmon_DESeq.ds %<>% estimateSizeFactors()
+# gene-wise dispersion estimates across all samples
+salmon_DESeq.ds %<>% estimateDispersions()
+# fit a neg. binomial GLM and compute Wald stat for each gene 
+salmon_DESeq.ds %<>% nbinomWaldTest()
+
+salmon_DESeq.ds
+```
+
+```{r}
+rowData(DESeq.ds) %>% colnames
+
+rowData(DESeq.ds)$WaldPvalue_condition_SPP1_KO_vs_wt %>% hist(breaks=19, main="Raw p-values for SPP1_KO vs wt")
+```
+
+```{r}
+rowData(salmon_DESeq.ds) %>% colnames
+
+rowData(salmon_DESeq.ds)$WaldPvalue_condition_SPP1_KO_vs_wt %>% hist(breaks=19, main="Raw p-values for SPP1_KO vs wt")
+```
+
+```{r}
+DGE.results <- results(DESeq.ds, independentFiltering = TRUE, alpha = 0.05)
+# the first line will tell you which comparison was done to achieve the log2FC 
+head(DGE.results)
+```
+
+```{r}
+salmon_DGE.results <- results(salmon_DESeq.ds, independentFiltering = TRUE, alpha = 0.05)
+# the first line will tell you which comparison was done to achieve the log2FC 
+head(salmon_DGE.results)
+```
+
+```{r}
+summary(DGE.results)
+```
+
+```{r}
+summary(salmon_DGE.results)
+```
+
+```{r}
+# the DESeqResult object can basically be handled like a data.frame
+table(DGE.results$padj < 0.05)
+```
+
+```{r}
+table(salmon_DGE.results$padj < 0.05)
+```
+
+```{r}
+DGE.results$padj %>%
+    hist(breaks=19, main="STAR adjusted p-values for SPP1_KO vs WT")
+```
+
+```{r}
+salmon_DGE.results$padj %>%
+    hist(breaks=19, main="Salmon adjusted p-values for SPP1_KO vs WT")
+```
+
+```{r}
+DGE.results.sorted <- DGE.results %>% `[`(order(.$padj),)
+head(DGE.results.sorted)
+```
+
+```{r}
+salmon_DGE.results.sorted <- salmon_DGE.results %>% `[`(order(.$padj),)
+head(salmon_DGE.results.sorted)
+```
+
+#### **List of genes mentioned to be differentially expressed:**
+
+| Pan Reactive | A1-Specific | A2-Specific |
+|--------------|-------------|-------------|
+| Lcn2         | H2-T23      | Clcf1       |
+| Steap4       | Serping1    | Tgm1        |
+| S1pr3        | H2-D1       | Ptx3        |
+| Timp1        | Ggta1       | S100a10     |
+| Hspb1        | Iigp1       | Sphk1       |
+| Cxcl10       | Gbp2        | Cd109       |
+| Cd44         | Fbln5       | Ptgs2       |
+| Osmr         | Ugt1a1      | Emp1        |
+| Cp           | Fkbp5       | Slc10a6     |
+| Serpina3n    | Psmb8       | Tm4sf1      |
+| Aspg         | Srgn        | B3gnt5      |
+| Vim          | Amigo2      | Cd14        |
+| Gfap         |             |             |
+
+```{r}
+par(mfrow=c(1,2))
+plotCounts(DESeq.ds, gene="Ptgs2", normalized = TRUE, xlab="")
+plotCounts(DESeq.ds, gene = which.max(DGE.results$padj), xlab="",
+           main = "Gene with max. p.adj.\n(=least significant)")
+```
+
+```{r}
+
+par(mfrow=c(1,2))
+plotCounts(salmon_DESeq.ds, gene="Mrc1", normalized = TRUE, xlab="")
+plotCounts(salmon_DESeq.ds, gene = which.max(salmon_DGE.results$padj), xlab="",
+           main = "Gene with max. p.adj.\n(=least significant)")
+```
+
+```{r}
+
+# identify genes with the desired adjusted p-value cut-off
+DGEgenes <- rownames(subset(DGE.results.sorted, padj < 0.05)) 
+# extract rlog-transformed values into a matrix
+rlog.dge <- DESeq.rlog[DGEgenes,] %>% assay
+# heatmap of DEG sorted by p.adjust
+pheatmap(rlog.dge, scale="none",
+         show_rownames=FALSE, main="STAR DGE (no scaling)",
+         color=colorRampPalette(RColorBrewer::brewer.pal(n=7, name="Reds"))(100))
+```
+
+```{r}
+
+# identify genes with the desired adjusted p-value cut-off
+salmon_DGEgenes <- rownames(subset(salmon_DGE.results.sorted, padj < 0.05)) 
+# extract rlog-transformed values into a matrix
+salmon_rlog.dge <- salmon_DESeq.rlog[salmon_DGEgenes,] %>% assay
+# heatmap of DEG sorted by p.adjust
+pheatmap(salmon_rlog.dge, scale="none",
+         show_rownames=FALSE, main="Salmon DGE (no scaling)",
+         color=colorRampPalette(RColorBrewer::brewer.pal(n=7, name="Reds"))(100))
+```
+
+```{r}
+pheatmap(rlog.dge, scale="row",
+         show_rownames=FALSE, main="STAR DGE (row-based z-score)")
+
+```
+
+```{r}
+pheatmap(salmon_rlog.dge, scale="row",
+         show_rownames=FALSE, main="Salmon DGE (row-based z-score)")
+
+```
+
+```{r}
+DESeq2::plotMA(DGE.results, alpha=0.05,
+       main="STAR Test: p.adj.value < 0.05", ylim = c(-4,4))
+
+```
+
+```{r}
+DESeq2::plotMA(salmon_DGE.results, alpha=0.05,
+       main="Salmon Test: p.adj.value < 0.05", ylim = c(-4,4))
+
+```
+
+```{r}
+vp1.1 <- EnhancedVolcano(DGE.results,
+                       lab=rownames(DGE.results),
+                       x='log2FoldChange', y='padj',
+                       pCutoff=0.05,
+                       title="STAR SPP1_KO / wt")
+
+print(vp1.1)
+```
+
+```{r}
+vp1.2 <- EnhancedVolcano(salmon_DGE.results,
+                       lab=rownames(salmon_DGE.results),
+                       x='log2FoldChange', y='padj',
+                       pCutoff=0.05,
+                       title="Salmon SPP1_KO / wt")
+
+print(vp1.2)
+```
+
+```{r}
+DGE.results.shrnk <- lfcShrink(DESeq.ds,
+            coef=2,
+            type="apeglm")
+
+resultsNames(DESeq.ds)
+```
+
+```{r}
+salmon_DGE.results.shrnk <- lfcShrink(salmon_DESeq.ds,
+            coef=2,
+            type="apeglm")
+
+resultsNames(salmon_DESeq.ds)
+```
+
+```{r}
+par(mfrow = c(1,2))
+DESeq2::plotMA(DGE.results, alpha=0.05,
+       main="no shrinkage", ylim=c(-4,4))
+DESeq2::plotMA(DGE.results.shrnk, alpha=0.05,
+       main="with logFC shrinkage", ylim=c(-4,4))
+```
+
+```{r}
+par(mfrow = c(1,2))
+DESeq2::plotMA(salmon_DGE.results, alpha=0.05,
+       main="no shrinkage", ylim=c(-4,4))
+DESeq2::plotMA(salmon_DGE.results.shrnk, alpha=0.05,
+       main="with logFC shrinkage", ylim=c(-4,4))
+```
+
+```{r}
+vp2.1 <- EnhancedVolcano(DGE.results.shrnk, lab=rownames(DGE.results.shrnk),
+                       x='log2FoldChange', y='padj', pCutoff = 0.05,
+                       title="with logFC shrinkage")
+
+vp1.1 + vp2.1
+```
+
+```{r}
+vp2.2 <- EnhancedVolcano(salmon_DGE.results.shrnk, lab=rownames(salmon_DGE.results.shrnk),
+                       x='log2FoldChange', y='padj', pCutoff = 0.05,
+                       title="with logFC shrinkage")
+
+vp1.2 + vp2.2
+```
+
+```{r}
+DGE.results %>% `[`(order(.$padj),) %>% head
+```
+
+```{r}
+salmon_DGE.results %>% `[`(order(.$padj),) %>% head
+```
+
+```{r}
+save.image(file = "DESeqReadyFiles.RData")
+```
+
+```{r}
+STAR_gene_name <- row.names(subset(DGE.results, padj < 0.05))
+write.table(cbind(STAR_gene_name,subset(DGE.results, padj < 0.05)),
+            file="STAR_DESeq2results_wt-vs-SPP1_KO.txt",
+            sep="\t", quote=FALSE, row.names=FALSE)
+```
+
+```{r}
+salmon_gene_name <- row.names(subset(salmon_DGE.results, padj < 0.05))
+write.table(cbind(salmon_gene_name,subset(salmon_DGE.results, padj < 0.05)),
+            file="Salmon_DESeq2results_wt-vs-SPP1_KO.txt",
+            sep="\t", quote=FALSE, row.names=FALSE)
+```
+
+```{r}
+plotPCA(DESeq.rlog, intgroup = "condition", ntop = 500, returnData = FALSE)
+```
+
+```{r}
+plotPCA(salmon_DESeq.rlog, intgroup = "condition", ntop = 500, returnData = FALSE)
+```
