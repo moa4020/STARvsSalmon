@@ -63,9 +63,7 @@ RNA sequencing (RNA-seq) is widely used to profile transcriptomes and identify d
 
 Salmon and STAR are two widely used alignment algorithms for RNA-seq data. The specific question to investigate is whether the use of Salmon and STAR alignment algorithms results in different pathways being enriched. This question is interesting because pathway enrichment analysis is often used to identify biological processes involved in specific conditions, and differences in pathway analysis based on the alignment algorithm used could impact the interpretation of results.
 
-Several studies have compared the performance of different RNA-seq alignment algorithms,
-including Salmon and STAR, and have shown that the choice of alignment algorithm can affect the results of downstream analysis. For example, a study by Hu et al. (2019) compared the performance of different RNA-seq alignment algorithms and showed that the choice of alignment algorithm can significantly affect the identification of DEGs. Another study by Xu et al. (2020) evaluated the performance of different RNA-seq alignment
-algorithms for quantifying gene expression and showed that Salmon performed better than STAR for some metrics. A third study by Tarazona et al. (2015) compared different RNA-seq analysis pipelines and showed that different pipelines can lead to different results in terms of DEG identification and pathway enrichment analysis.
+Several studies have compared the performance of different RNA-seq alignment algorithms, including Salmon and STAR, and have shown that the choice of alignment algorithm can affect the results of downstream analysis. For example, a study by Hu et al. (2019) compared the performance of different RNA-seq alignment algorithms and showed that the choice of alignment algorithm can significantly affect the identification of DEGs. Another study by Xu et al. (2020) evaluated the performance of different RNA-seq alignment algorithms for quantifying gene expression and showed that Salmon performed better than STAR for some metrics. A third study by Tarazona et al. (2015) compared different RNA-seq analysis pipelines and showed that different pipelines can lead to different results in terms of DEG identification and pathway enrichment analysis.
 
 Overall, the hypothesis is that applying Salmon and STAR alignment algorithms will result in different pathways being enriched.
 
@@ -88,11 +86,11 @@ Overall, the hypothesis is that applying Salmon and STAR alignment algorithms wi
 
 *`A detailed verbose description of all the steps you took to arrive at the conclusion including how and where the data was downloaded, pre-processed and analyzed. This should also include some brief reasoning of why you chose certain tools/solutions and what the results of the QC tell you about the data at hand.`*
 
-1.  [Downloading Data & Basic QC]
+1.  [Downloading Data & Basic QC](#downloading-data-basic-qc)
 2.  [Downloading the .fastq files]
 3.  [Downloading the .fasta file for mm10 genome]
 4.  [Pre-alignment Basic QC]
-5.  [STAR Indexing & Alignment]
+5.  [STAR Indexing & Alignment](#star-indexing-alignment)
 6.  [STAR Post-alignment MultiQC]
 7.  [Downloading and Installing Salmon]
 8.  [Salmon Post-Alignment Multiqc]
@@ -136,7 +134,7 @@ Overall, the hypothesis is that applying Salmon and STAR alignment algorithms wi
 
     **Ans**: Illumina NovaSeq 6000 was used for sequencing
 
-### Downloading Data & Basic QC
+### Downloading Data & Basic QC {#downloading-data-basic-qc}
 
 #### Downloading the `.fastq` files
 
@@ -231,7 +229,7 @@ includeHTML("QC/pre_alignment_multiqc_report.html")
 
 **Inference:** it is safe to say that there are no confounding effects that can be attributed to one of the conditions from these results. Although the least amount and the highest amount of reads seem to come from one of the samples in SPP1_KO and wt respectively the sample size is low and the difference is not uniform across both the conditions to assume that this might cause a bias.
 
-### STAR Indexing & Alignment
+### STAR Indexing & Alignment {#star-indexing-alignment}
 
 I have used the following scripts to perform indexing and alignment:
 
@@ -843,10 +841,10 @@ salmon_Enrichment <- enrichKEGG(
 )
 ```
 
-```{r fig.height=5, fig.width=3}
+```{r}
 #autophagy is in the list
-dotplot(STAR_Enrichment)
-dotplot(salmon_Enrichment)
+dotplot(STAR_Enrichment, font.size=8)
+dotplot(salmon_Enrichment, font.size=8)
 ```
 
 ```{r}
